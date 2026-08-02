@@ -58,7 +58,7 @@ int TritonController::sendPCMMode(MsgHapticPCMMode* packet) {
   memcpy(&buff[1], packet, size);
   return sendRaw(buff, sizeof(buff));
 }
-
+ 
 int TritonController::sendPCMStereo(MsgHapticPCMStereo* packet) {
   constexpr size_t size = sizeof(MsgHapticPCMStereo);
 
@@ -204,14 +204,14 @@ void TritonController::startPoll() {
 
 void TritonController::stopPoll() {
   running.store(false);
-  if (pollThread.joinable()) pollThread.join();
+  //if (pollThread.joinable()) pollThread.join();
 }
 
 void TritonController::pollLoop() {
   while (running.load()) {
     uint8_t buff[64] = {0};
     int read = readRaw(buff, 64);
-    if (read == 0) continue;
+    if (read == 0 || read == -1) continue;
     uint8_t reportID = buff[0];
 
     // remove report id;

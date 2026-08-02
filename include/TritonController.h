@@ -434,12 +434,15 @@ class TritonController {
 private:
   hid_device* hid_handle;
 
+
   std::atomic<bool> running = false;
   std::thread pollThread;
   std::mutex stateMutex;
+  // updated at 250hz (altho measured 266hz on puck and 248.2hz wired)
   TritonMTUFull_t _state;
   
   std::mutex batteryMutex;
+  // will get updated once every 3.5 secs
   TritonBatteryStatus_t _battery;
   
   void pollLoop();
