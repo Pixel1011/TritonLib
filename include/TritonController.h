@@ -443,17 +443,17 @@ private:
   
   std::mutex batteryMutex;
   // will get updated once every 3.5 secs
-  TritonBatteryStatus_t _battery;
+  TritonBatteryStatus_t _battery{};
   
   void pollLoop();
   
   public:
   std::atomic<uint64_t> stateCounter{0};
   std::atomic<uint64_t> batteryCounter{0};
-  TritonInterface connectionType;
+  TritonInterface connectionType{};
 
   // use to check if the controller has disconnected, if true, delete this class and use controller finder to try connect again
-  bool disconnected = false;
+  std::atomic<bool> disconnected = false;
   
   TritonController(hid_device* handle, TritonInterface connection);
   ~TritonController();

@@ -11,14 +11,19 @@ TritonController::TritonController(hid_device* handle, TritonInterface connectio
   this->connectionType = connection;
 }
 
-TritonController::~TritonController()
-{
-  this->stopPoll();
-  this->close();
+TritonController::~TritonController() {
+  close();
 }
 
 void TritonController::close() {
-  hid_close(hid_handle);
+  this->stopPoll();
+  if (pollThread.joinable()) {
+    pollThread.join();
+  }
+  if (hid_handle != nullptr) {
+    hid_close(hid_handle);
+    hid_handle = nullptr;
+  }
 }
 
 // these 2 are basically the only thing stolen from SteamHapticsSinger
@@ -58,7 +63,7 @@ int TritonController::sendPCMMode(MsgHapticPCMMode* packet) {
   memcpy(&buff[1], packet, size);
   return sendRaw(buff, sizeof(buff));
 }
- 
+
 int TritonController::sendPCMStereo(MsgHapticPCMStereo* packet) {
   constexpr size_t size = sizeof(MsgHapticPCMStereo);
 
@@ -74,7 +79,7 @@ int TritonController::sendRaw(uint8_t packet[], size_t length) {
   if (r < 0) {
     printf("Send Error, hid_error: %ls\n", hid_error(this->hid_handle));
     stopPoll();
-    close();
+    disconnected.store(true);
     return -1;
   }
   return r;
@@ -82,11 +87,11 @@ int TritonController::sendRaw(uint8_t packet[], size_t length) {
 
 // will return -1 if controller disconnects, otherwise length of bytes read
 int TritonController::readRaw(uint8_t buff[], size_t length) {
-  int r = hid_read(this->hid_handle, buff, length);
-  if (r < 0) {
+  int r = hid_read_timeout(this->hid_handle, buff, length, 100);
+  if (r < 0 || (connectionType == TritonInterface::PUCK && r <= 0)) {
     printf("Read Error, hid_error: %ls\n", hid_error(this->hid_handle));
     stopPoll();
-    close();
+    disconnected.store(true);
     return -1;
   }
   return r;
@@ -204,7 +209,7 @@ void TritonController::startPoll() {
 
 void TritonController::stopPoll() {
   running.store(false);
-  //if (pollThread.joinable()) pollThread.join();
+  // if (pollThread.joinable()) pollThread.join();
 }
 
 void TritonController::pollLoop() {
