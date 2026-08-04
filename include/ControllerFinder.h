@@ -16,7 +16,7 @@ class ControllerFinder {
   hid_device* open_steam_controller_hid(uint16_t pid);
   public:
   ControllerFinder();
-  ~ControllerFinder() = default;
+  ~ControllerFinder();
 
   TritonController* getController();
   

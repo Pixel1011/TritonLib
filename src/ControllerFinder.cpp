@@ -33,6 +33,10 @@ ControllerFinder::ControllerFinder() {
   }
 }
 
+ControllerFinder::~ControllerFinder() {
+  hid_exit();
+}
+
 // basically completely stolen from SteamHapticsSinger
 TritonController* ControllerFinder::getController() {
   ControllerType type;

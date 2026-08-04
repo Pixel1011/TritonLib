@@ -27,33 +27,31 @@ void TritonController::close() {
 }
 
 // these 2 are basically the only thing stolen from SteamHapticsSinger
-int TritonController::playNote(int channel, int note, int velocity) {
+int TritonController::playNote(int channel, int note, int gaindb) {
   double frequency = midiFrequency[note];
-  return playFrequency(channel, frequency, velocity);
+  return playFrequency(channel, frequency, gaindb, 0xffff);
 }
 
-int TritonController::playFrequency(int channel, double frequency, int velocity) {
+// packet builder, idk if i should have these for all of them
+int TritonController::playFrequency(uint8_t channel, uint16_t frequency, int8_t gaindb, uint16_t durationms, uint16_t lfoFreq = 0, uint8_t lfoDepth = 0) {
   MsgHapticLfoTone packet{};
+
   if (frequency == -1) {
-    // This prevents the controller from rebooting when using rumble motors and drifting out of tune
     packet.side = channel;
   } else {
-    int frequencyValue = static_cast<int>(frequency);
+    int frequencyValue = static_cast<uint16_t>(frequency);
     packet.side = channel;
-    packet.gain_db = velocity;
+    packet.gain_db = gaindb;
     packet.frequency = frequencyValue;
-    packet.duration_ms = 0xff64;
+    packet.duration_ms = durationms;
     packet.lfo_freq = 0;
     packet.lfo_depth = 0;
   }
 
-  constexpr size_t size = sizeof(MsgHapticLfoTone);
-
-  unsigned char buff[size + 1] = {0};
-  buff[0] = LFO_TONE;
-  memcpy(&buff[1], &packet, size);
-  return sendRaw(buff, sizeof(buff));
+  return sendLFOTone(&packet);
 }
+
+
 
 int TritonController::sendPCMMode(MsgHapticPCMMode* packet) {
   constexpr size_t size = sizeof(MsgHapticPCMMode);
@@ -70,6 +68,15 @@ int TritonController::sendPCMStereo(MsgHapticPCMStereo* packet) {
   unsigned char buff[size + 1] = {0};
   buff[0] = PCM_STEREO;
   memcpy(&buff[1], packet, size);
+  return sendRaw(buff, sizeof(buff));
+}
+
+int TritonController::sendLFOTone(MsgHapticLfoTone* packet) {
+  constexpr size_t size = sizeof(MsgHapticLfoTone);
+
+  unsigned char buff[size + 1] = {0};
+  buff[0] = LFO_TONE;
+  memcpy(&buff[1], &packet, size);
   return sendRaw(buff, sizeof(buff));
 }
 

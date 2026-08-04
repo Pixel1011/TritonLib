@@ -459,11 +459,14 @@ private:
   ~TritonController();
   void close();
   int playNote(int channel, int note, int velocity);
-  int playFrequency(int channel, double frequency, int velocity);
+  int playFrequency(uint8_t channel, uint16_t frequency, int8_t gaindb, uint16_t durationms, uint16_t lfoFreq = 0, uint8_t lfoDepth = 0);
   int sendPCMMode(MsgHapticPCMMode* packet);
 
   // maybe make a function that can just take in a mode and massive byte buffer and play it via another thread so execution can still occurs
+  
   int sendPCMStereo(MsgHapticPCMStereo* packet);
+  int sendLFOTone(MsgHapticLfoTone* packet);
+
   int sendRaw(uint8_t bytes[], size_t length);
   void setupPCMStreaming(TritonPCMMode mode);
   // reading
