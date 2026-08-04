@@ -33,7 +33,7 @@ int TritonController::playNote(int channel, int note, int gaindb) {
 }
 
 // packet builder, idk if i should have these for all of them
-int TritonController::playFrequency(uint8_t channel, uint16_t frequency, int8_t gaindb, uint16_t durationms, uint16_t lfoFreq = 0, uint8_t lfoDepth = 0) {
+int TritonController::playFrequency(uint8_t channel, uint16_t frequency, int8_t gaindb, uint16_t durationms, uint16_t lfoFreq, uint8_t lfoDepth) {
   MsgHapticLfoTone packet{};
 
   if (frequency == -1) {
@@ -76,7 +76,7 @@ int TritonController::sendLFOTone(MsgHapticLfoTone* packet) {
 
   unsigned char buff[size + 1] = {0};
   buff[0] = LFO_TONE;
-  memcpy(&buff[1], &packet, size);
+  memcpy(&buff[1], packet, size);
   return sendRaw(buff, sizeof(buff));
 }
 
