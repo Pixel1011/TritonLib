@@ -22,10 +22,16 @@ assume nothing is stable and everything could change at any time
   You shouldnt need to mess with any mutexes yourself, just use the getters in TritonController and all will be well.
 
 
+---
+
 note for me on how to git
+
 git rm -r --cached origfolder
+
 git submodule add https://github.com/Pixel1011/TritonLib.git TritonLib
 
 
+
 git submodule update --remote --merge TritonLib
+
 git add TritonLib
