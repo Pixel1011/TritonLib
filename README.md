@@ -26,12 +26,12 @@ assume nothing is stable and everything could change at any time
 
 note for me on how to git
 
-git rm -r --cached origfolder
+``git rm -r --cached origfolder``
 
-git submodule add https://github.com/Pixel1011/TritonLib.git TritonLib
+``git submodule add https://github.com/Pixel1011/TritonLib.git TritonLib``
 
 
 
-git submodule update --remote --merge TritonLib
+``git submodule update --remote --merge TritonLib``
 
-git add TritonLib
+``git add TritonLib``
