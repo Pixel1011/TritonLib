@@ -51,7 +51,15 @@ int TritonController::playFrequency(uint8_t channel, uint16_t frequency, int8_t 
   return sendLFOTone(&packet);
 }
 
+int TritonController::setLizardMode(LizardModeState_t mode) {
+  FeatureReportMsg msg{};
+  msg.header.type = ID_SET_SETTINGS_VALUES;
+  msg.header.length = sizeof(ControllerSetting);
+  msg.payload.setSettingsValues.settings[0].settingNum = SETTING_LIZARD_MODE;
+  msg.payload.setSettingsValues.settings[0].settingValue = mode;
 
+  return sendFeatureReport(&msg, sizeof(msg));
+}
 
 int TritonController::sendPCMMode(MsgHapticPCMMode* packet) {
   constexpr size_t size = sizeof(MsgHapticPCMMode);
@@ -72,6 +80,7 @@ int TritonController::sendPCMStereo(MsgHapticPCMStereo* packet) {
 }
 
 int TritonController::sendLFOTone(MsgHapticLfoTone* packet) {
+
   constexpr size_t size = sizeof(MsgHapticLfoTone);
 
   unsigned char buff[size + 1] = {0};
@@ -85,6 +94,21 @@ int TritonController::sendRaw(uint8_t packet[], size_t length) {
   int r = hid_write(this->hid_handle, packet, length);
   if (r < 0) {
     printf("Send Error, hid_error: %ls\n", hid_error(this->hid_handle));
+    stopPoll();
+    disconnected.store(true);
+    return -1;
+  }
+  return r;
+}
+
+int TritonController::sendFeatureReport(FeatureReportMsg* msg, size_t length) { 
+  uint8_t buff[length + 1] = {0};
+  buff[0] = 1;
+  memcpy(&buff[1], msg, length);
+
+  int r = hid_send_feature_report(this->hid_handle, buff, length + 1);
+  if (r < 0) {
+    printf("Feature report send error: %ls\n", hid_error(this->hid_handle));
     stopPoll();
     disconnected.store(true);
     return -1;
@@ -206,6 +230,11 @@ void TritonController::setupPCMStreaming(TritonPCMMode mode) {
   }
 }
 
+/* 
+  Technically stops the controller from turning off by itself. Steam itself being open does the same.
+  It's still being polled by something even if either are not running so thats confusing.
+  idk ¯\_(ツ)_/¯
+*/
 void TritonController::startPoll() {
   if (pollThread.joinable()) return;
   running.store(true);
