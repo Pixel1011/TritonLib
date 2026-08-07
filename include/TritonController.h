@@ -664,7 +664,7 @@ private:
   ~TritonController();
   void close();
   int playNote(int channel, int note, int velocity);
-  int playFrequency(uint8_t channel, uint16_t frequency, int8_t gaindb, uint16_t durationms, uint16_t lfoFreq = 0, uint8_t lfoDepth = 0);
+  int playFrequency(uint8_t channel, uint16_t frequency, int8_t gaindb, uint16_t durationms = 0xffff, uint16_t lfoFreq = 0, uint8_t lfoDepth = 0);
   int setLizardMode(LizardModeState_t mode);
   
   // maybe make a function that can just take in a mode and massive byte buffer and play it via another thread so execution can still occurs
