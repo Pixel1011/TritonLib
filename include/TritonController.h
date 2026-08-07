@@ -206,7 +206,7 @@ typedef enum
 	SETTING_ALL=0xFF
 } ControllerSettings;
 
-// probably not all relating to the steam controller
+// probably not all relating to the steam controller, though sure could be alot of them
 enum FeatureReportMessageIDs
 {
 	ID_SET_DIGITAL_MAPPINGS              = 0x80,

@@ -7,16 +7,16 @@ enum class ControllerType {
 	None,
 	Original,
 	Triton,
-	Jupiter,
-	Galileo
+	//Jupiter,
+	//Galileo
 };
 
-class ControllerFinder {
+class TritonFinder {
   private:
   hid_device* open_steam_controller_hid(uint16_t pid);
   public:
-  ControllerFinder();
-  ~ControllerFinder();
+  TritonFinder();
+  ~TritonFinder();
 
   TritonController* getController();
   

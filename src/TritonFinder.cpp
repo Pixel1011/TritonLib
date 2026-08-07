@@ -1,6 +1,6 @@
-#include "ControllerFinder.h"
+#include "TritonFinder.h"
 
-hid_device* ControllerFinder::open_steam_controller_hid(uint16_t pid) {
+hid_device* TritonFinder::open_steam_controller_hid(uint16_t pid) {
   struct hid_device_info* devs = hid_enumerate(0x28DE, pid);
   hid_device* handle = nullptr;
   uint8_t buf[64];
@@ -23,7 +23,7 @@ hid_device* ControllerFinder::open_steam_controller_hid(uint16_t pid) {
   return handle;
 }
 
-ControllerFinder::ControllerFinder() {
+TritonFinder::TritonFinder() {
   // init hidAPI
   int r = hid_init();
   if (r != 0) {
@@ -33,12 +33,12 @@ ControllerFinder::ControllerFinder() {
   }
 }
 
-ControllerFinder::~ControllerFinder() {
+TritonFinder::~TritonFinder() {
   hid_exit();
 }
 
 // basically completely stolen from SteamHapticsSinger
-TritonController* ControllerFinder::getController() {
+TritonController* TritonFinder::getController() {
   ControllerType type;
 
   hid_device* hid_handle;
