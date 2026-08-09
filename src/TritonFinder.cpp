@@ -23,8 +23,9 @@ hid_device* TritonFinder::open_steam_controller_hid(uint16_t pid) {
   return handle;
 }
 
-TritonFinder::TritonFinder() {
+TritonFinder::TritonFinder(bool silent) {
   // init hidAPI
+  this->silent = silent;
   int r = hid_init();
   if (r != 0) {
     std::cerr << "HIDAPI Init Error: " << r << std::endl;
@@ -48,19 +49,19 @@ TritonController* TritonFinder::getController() {
   // Open Steam Controller device
 
   if ((hid_handle = this->open_steam_controller_hid(0x1302)) != nullptr) { // Steam Controller (2026)
-    std::cout << "Found wired Steam Controller (2026)" << std::endl;
+    if (!silent) std::cout << "Found wired Steam Controller (2026)" << std::endl;
     type = ControllerType::Triton;
     tritonWired = true;
 
   } else if ((hid_handle = this->open_steam_controller_hid(0x1304)) != nullptr) { // Steam Puck
-    std::cout << "Found Steam Puck, using first Steam Controller (2026)" << std::endl;
+    if (!silent) std::cout << "Found Steam Puck, using first Steam Controller (2026)" << std::endl;
     type = ControllerType::Triton;
     
   } else if ((hid_handle = this->open_steam_controller_hid(0x1305)) != nullptr) { // Steam Machine internal puck
-    std::cout << "Found Steam Machine internal puck, using first Steam Controller (2026)" << std::endl;
+    if (!silent) std::cout << "Found Steam Machine internal puck, using first Steam Controller (2026)" << std::endl;
     type = ControllerType::Triton;
   } else {
-    std::cout << "No device found" << std::endl;
+    if (!silent) std::cout << "No device found" << std::endl;
     type = ControllerType::None;
   }
 

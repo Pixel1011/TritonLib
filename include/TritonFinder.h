@@ -13,9 +13,10 @@ enum class ControllerType {
 
 class TritonFinder {
   private:
+  bool silent = false;
   hid_device* open_steam_controller_hid(uint16_t pid);
   public:
-  TritonFinder();
+  TritonFinder(bool silent = false);
   ~TritonFinder();
 
   TritonController* getController();
