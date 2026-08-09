@@ -51,6 +51,114 @@ int TritonController::playFrequency(uint8_t channel, uint16_t frequency, int8_t 
   return sendLFOTone(&packet);
 }
 
+int TritonController::_playStereoAudio(uint8_t pcmBytes[], size_t length, TritonPCMMode mode, std::function<void(int step)> callback) {
+  if (length <= 0) return -1;
+  // not enough bandwidth so cant play regardless
+  if (this->connectionType == TritonInterface::PUCK && mode == TritonPCMMode::Khz8_16Bit) return -2;
+
+  this->setupPCMStreaming(mode);
+
+  int SAMPLE_RATE = 8000;
+  int BYTES_PER_FRAME = 2;
+  int SAMPLES_PER_PACKET = 31;
+  int bytesPerChannel = 31;
+
+  if (mode == TritonPCMMode::Khz1_16Bit || mode == TritonPCMMode::Khz2_16Bit || mode == TritonPCMMode::Khz4_16Bit || mode == TritonPCMMode::Khz8_16Bit) {
+    BYTES_PER_FRAME = 4;
+    SAMPLES_PER_PACKET = 15;
+    bytesPerChannel = 30;
+  }
+
+  size_t NEED_BYTES = SAMPLES_PER_PACKET * BYTES_PER_FRAME;
+  // clang-format off
+  if (mode == TritonPCMMode::Khz1_16Bit || mode == TritonPCMMode::Khz1_8Bit || mode == TritonPCMMode::Khz1_8Bit_ulaw) {
+    SAMPLE_RATE = 1000;
+  } else
+  if (mode == TritonPCMMode::Khz2_16Bit || mode == TritonPCMMode::Khz2_8Bit || mode == TritonPCMMode::Khz2_8Bit_ulaw) {
+    SAMPLE_RATE = 2000;
+  } else
+  if (mode == TritonPCMMode::Khz4_16Bit || mode == TritonPCMMode::Khz4_8Bit || mode == TritonPCMMode::Khz4_8Bit_ulaw) {
+    SAMPLE_RATE = 4000;
+  } else
+  if (mode == TritonPCMMode::Khz8_16Bit || mode == TritonPCMMode::Khz8_8Bit || mode == TritonPCMMode::Khz8_8Bit_ulaw) {
+    SAMPLE_RATE = 8000;
+  }
+  // clang-format on
+  auto period = std::chrono::microseconds((SAMPLES_PER_PACKET * 1000000) / SAMPLE_RATE);
+  int readPointer = 0;
+
+  MsgHapticPCMStereo packet;
+
+  auto nextPacketTime = std::chrono::steady_clock::now();
+  {
+    std::lock_guard<std::mutex> lock(audioMutex);
+    playingAudio.store(true);
+  }
+  while (true) {
+    if (!playingAudio.load()) return 0;
+    // yes this intentionally skips the first 60-62 bytes
+    readPointer += NEED_BYTES;
+    uint8_t tmp[NEED_BYTES]{0};
+
+    if (readPointer >= static_cast<int>(length)) break;
+
+    // read bytes
+    int r = std::min(static_cast<int>(length) - readPointer, static_cast<int>(NEED_BYTES));
+    std::memcpy(tmp, pcmBytes + readPointer, r);
+    if (r < static_cast<int>(NEED_BYTES)) std::memset(tmp + r, 0, NEED_BYTES - r); // s8 silence = 0
+
+    packet.length = bytesPerChannel;
+
+    for (int i = 0; i < SAMPLES_PER_PACKET; i++) {
+      if (BYTES_PER_FRAME == 4) {
+        // 60 bytes over 15 samples
+        // 16 bit
+        size_t base = i * 4;
+        uint8_t leftLow = tmp[base];
+        uint8_t leftHigh = tmp[base + 1];
+        uint8_t rightLow = tmp[base + 2];
+        uint8_t rightHigh = tmp[base + 3];
+
+        packet.left[i * 2] = leftLow;
+        packet.left[i * 2 + 1] = leftHigh;
+        packet.right[i * 2] = rightLow;
+        packet.right[i * 2 + 1] = rightHigh;
+      } else {
+        // 8 bit
+        // 62 bytes over 31 samples
+        uint8_t left = tmp[i * 2];
+        uint8_t right = tmp[i * 2 + 1];
+        packet.left[i] = left;
+        packet.right[i] = right;
+      }
+    }
+
+    this->sendPCMStereo(&packet);
+    callback(NEED_BYTES);
+    nextPacketTime += period;
+
+    while (std::chrono::steady_clock::now() < nextPacketTime) {}
+  }
+
+  return 0;
+}
+
+int TritonController::playStereoAudio(uint8_t pcmBytes[], size_t length, TritonPCMMode mode, std::function<void(int step)> callback) {
+  {
+    std::lock_guard<std::mutex> lock(audioMutex);
+    if (playingAudio.load()) {
+      playingAudio.store(false);
+    }
+  }
+  if (playThread.joinable()) playThread.join();
+
+  playThread = std::thread([this, pcmBytes, length, mode, callback = std::move(callback)]() {
+    _playStereoAudio(pcmBytes, length, mode, callback);
+  });
+
+  return 1;
+}
+
 int TritonController::setLizardMode(LizardModeState_t mode) {
   FeatureReportMsg msg{};
   msg.header.type = ID_SET_SETTINGS_VALUES;
@@ -101,7 +209,7 @@ int TritonController::sendRaw(uint8_t packet[], size_t length) {
   return r;
 }
 
-int TritonController::sendFeatureReport(FeatureReportMsg* msg, size_t length) { 
+int TritonController::sendFeatureReport(FeatureReportMsg* msg, size_t length) {
   uint8_t buff[length + 1] = {0};
   buff[0] = 1;
   memcpy(&buff[1], msg, length);
@@ -156,58 +264,12 @@ void TritonController::setupPCMStreaming(TritonPCMMode mode) {
   // idk im just leaving it at this to not risk audio quality, which they do seem to affect from testing
   // only needs to be setup once though per restart of the controller. then any pcm streamed to it will play just fine
 
-  uint8_t channels[] = {0};
-  uint8_t params[] = {4};
-  int reps = 0;
-
-  int totalSteps = (sizeof(channels) / sizeof(channels[0])) * (sizeof(params) / sizeof(params[0])) * reps;
-  std::string aou = "Setup: ";
-  Utils::ProgressHelper helper(totalSteps, &aou, 1, Utils::Mode::PROGRESSBAR);
-
-  // send one 0
- // MsgHapticPCMMode modePacket;
- // modePacket.operation = 0x02;
- // modePacket.side = 0;
- // modePacket.param = 0;
-
- // sendPCMMode(&modePacket);
-
-
-  for (uint8_t ch : channels) {
-    for (uint8_t p : params) {
-      MsgHapticPCMMode modePacket;
-      modePacket.operation = 0x02;
-      modePacket.side = ch;
-      modePacket.param = p;
-
-      sendPCMMode(&modePacket);
-      for (int rep = 0; rep < reps; rep++) {
-        MsgHapticPCMStereo packet;
-        packet.length = 31;
-
-        for (int i = 0; i < 31; i++) {
-          packet.left[i] = 0x00;
-          packet.right[i] = 0x00;
-        }
-        sendPCMStereo(&packet);
-        helper.step();
-        // fun fact, windows likes to lie if it spent 1ms waiting when in reality it was spending >10ms
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-
-        }
-        }
-        }
-        std::cout << std::endl
-        << "Setup finished."
-        << std::endl
-        << "If your audio sounds good, you can skip this step with -s"
-        << std::endl;*/
   // new imp from data by iczero (ty :D)
 
   // play on all actuators
   // i would make this an enum but i still think its wrong, 0,1 is clearly playing on internal haptics
   // 3,4 sounds like left tp and right internal, no idea
-  // 0 TP_LEFT, 1 TP_RIGHT, 3 INT_LEFT, 4 INT_RIGHT
+  // 0 TP_LEFT, 1 TP_RIGHT, 3 INT_LEFT, 4 INT_RIGHT*/
 
   uint8_t channels[] = {2, 5};
 
@@ -219,8 +281,8 @@ void TritonController::setupPCMStreaming(TritonPCMMode mode) {
 
     sendPCMMode(&packetDisable);
   }
+  if (mode == TritonPCMMode::None) return;
   std::this_thread::sleep_for(std::chrono::milliseconds(10));
-
   for (uint8_t ch : channels) {
     MsgHapticPCMMode packet;
     packet.operation = static_cast<uint8_t>(TritonPCMOperation::ENABLE);
@@ -230,7 +292,7 @@ void TritonController::setupPCMStreaming(TritonPCMMode mode) {
   }
 }
 
-/* 
+/*
   Technically stops the controller from turning off by itself. Steam itself being open does the same.
   It's still being polled by something even if either are not running so thats confusing.
   idk ¯\_(ツ)_/¯

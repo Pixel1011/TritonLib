@@ -4,6 +4,7 @@
 #include <atomic>
 #include <hidapi.h>
 #include <cstdint>
+#include <functional>
 #define HID_FEATURE_REPORT_BYTES 64
 // have not tested 0x87 and 0x89. i could be completely wrong about them
 #pragma region structs
@@ -585,7 +586,9 @@ enum class TritonPCMMode {
   Khz8_8Bit_ulaw,
   Khz4_8Bit_ulaw,
   Khz2_8Bit_ulaw,
-  Khz1_8Bit_ulaw
+  Khz1_8Bit_ulaw,
+  // not a real mode on the controller and cannot be passed in a PCM Mode packet as a param, as you send a 1 on the operation byte to disable if doing it manually. This is purely for setupPCMStreaming.
+  None
 };
 
 enum class TritonPCMOperation {
@@ -640,23 +643,33 @@ private:
   hid_device* hid_handle;
 
 
-  std::atomic<bool> running = false;
-  std::thread pollThread;
   std::mutex stateMutex;
+  std::mutex batteryMutex;
+  
+  std::atomic<bool> running = false;
   // updated at 250hz (altho measured 266hz on puck and 248.2hz wired)
   TritonMTUFull_t _state;
-  
-  std::mutex batteryMutex;
   // will get updated once every 3.5 secs
   TritonBatteryStatus_t _battery{};
   
+  std::thread pollThread;
+
+  std::mutex audioMutex;
+  
+  std::atomic<bool> playingAudio = false;
+  TritonPCMMode currentMode;
+  
+  
   void pollLoop();
+  int _playStereoAudio(uint8_t pcmBytes[], size_t length, TritonPCMMode mode, std::function<void(int step)> callback);
   
   public:
+  std::thread playThread;
+
   std::atomic<uint64_t> stateCounter{0};
   std::atomic<uint64_t> batteryCounter{0};
   TritonInterface connectionType{};
-
+  
   // use to check if the controller has disconnected, if true, delete this class and use controller finder to try connect again
   std::atomic<bool> disconnected = false;
   
@@ -665,22 +678,22 @@ private:
   void close();
   int playNote(int channel, int note, int velocity);
   int playFrequency(uint8_t channel, uint16_t frequency, int8_t gaindb, uint16_t durationms = 0xffff, uint16_t lfoFreq = 0, uint8_t lfoDepth = 0);
+  // plays audio on the steam controller with given data. If called again, will stop and play new audio.
+  int playStereoAudio(uint8_t pcmBytes[], size_t length, TritonPCMMode mode, std::function<void(int step)> callback = [](int step) {/*do nothing*/});
   int setLizardMode(LizardModeState_t mode);
-  
-  // maybe make a function that can just take in a mode and massive byte buffer and play it via another thread so execution can still occurs
   
   int sendPCMMode(MsgHapticPCMMode* packet);
   int sendPCMStereo(MsgHapticPCMStereo* packet);
   int sendLFOTone(MsgHapticLfoTone* packet);
 
   int sendRaw(uint8_t bytes[], size_t length);
+  int readRaw(uint8_t buff[], size_t length);
   int sendFeatureReport(FeatureReportMsg* msg, size_t length);
 
   void setupPCMStreaming(TritonPCMMode mode);
   // reading
   void startPoll();
   void stopPoll();
-  int readRaw(uint8_t buff[], size_t length);
 
   TritonMTUFull_t getFullReport();
   TritonBatteryStatus_t getBatteryStatus();
