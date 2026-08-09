@@ -29,7 +29,7 @@ TritonFinder::TritonFinder() {
   if (r != 0) {
     std::cerr << "HIDAPI Init Error: " << r << std::endl;
     std::cin.ignore();
-    exit(1);
+    throw "HIDAPI Init Error";
   }
 }
 
@@ -53,9 +53,12 @@ TritonController* TritonFinder::getController() {
     tritonWired = true;
 
   } else if ((hid_handle = this->open_steam_controller_hid(0x1304)) != nullptr) { // Steam Puck
-    std::cout << "Found Steam Puck, will attempt to use the first Steam Controller (2026)" << std::endl;
+    std::cout << "Found Steam Puck, using first Steam Controller (2026)" << std::endl;
     type = ControllerType::Triton;
-
+    
+  } else if ((hid_handle = this->open_steam_controller_hid(0x1305)) != nullptr) { // Steam Machine internal puck
+    std::cout << "Found Steam Machine internal puck, using first Steam Controller (2026)" << std::endl;
+    type = ControllerType::Triton;
   } else {
     std::cout << "No device found" << std::endl;
     type = ControllerType::None;
