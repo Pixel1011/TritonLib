@@ -635,6 +635,14 @@ typedef struct
 
 #pragma pack(pop)
 #pragma endregion
+// my own structs purely for this library, nothing to do with the controller in the hardware sense
+struct TritonInputUpdate {
+  TritonMTUFull_t state;
+  // TritonButtons
+  uint32_t pressed;
+  // TritonButtons
+  uint32_t released;
+};
 
 // yes im kinda turning this into a general purpose class for the sc2
 // idk im bored
@@ -642,23 +650,25 @@ class TritonController {
 private:
   hid_device* hid_handle;
 
-
+  // internal var update stuff
   std::mutex stateMutex;
   std::mutex batteryMutex;
-  
   std::atomic<bool> running = false;
   // updated at 250hz (altho measured 266hz on puck and 248.2hz wired)
   TritonMTUFull_t _state;
   // will get updated once every 3.5 secs
   TritonBatteryStatus_t _battery{};
-  
   std::thread pollThread;
-
-  std::mutex audioMutex;
   
+  // playing audio stuff
+  std::mutex audioMutex;
   std::atomic<bool> playingAudio = false;
   TritonPCMMode currentMode;
   
+  // input process stuff
+  std::atomic<bool> processUpdates = false;
+  std::vector<TritonInputUpdate> pendingInputUpdates;
+  std::mutex inputMutex;
   
   void pollLoop();
   int _playStereoAudio(uint8_t pcmBytes[], size_t length, TritonPCMMode mode, std::function<void(int step)> callback);
@@ -678,7 +688,7 @@ private:
   void close();
   int playNote(int channel, int note, int velocity);
   int playFrequency(uint8_t channel, uint16_t frequency, int8_t gaindb, uint16_t durationms = 0xffff, uint16_t lfoFreq = 0, uint8_t lfoDepth = 0);
-  // plays audio on the steam controller with given data. If called again, will stop and play new audio.
+  // plays audio on the steam controller with given data on a new thread. If called again, will stop and play new audio.
   int playStereoAudio(uint8_t pcmBytes[], size_t length, TritonPCMMode mode, std::function<void(int step)> callback = [](int step) {/*do nothing*/});
   int setLizardMode(LizardModeState_t mode);
   
@@ -692,8 +702,9 @@ private:
 
   void setupPCMStreaming(TritonPCMMode mode);
   // reading
-  void startPoll();
+  void startPoll(bool processUpdates = false);
   void stopPoll();
+  std::vector<TritonInputUpdate> pollUpdates();
 
   TritonMTUFull_t getFullReport();
   TritonBatteryStatus_t getBatteryStatus();

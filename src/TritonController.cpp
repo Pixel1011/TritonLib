@@ -9,6 +9,7 @@
 TritonController::TritonController(hid_device* handle, TritonInterface connection) {
   this->hid_handle = handle;
   this->connectionType = connection;
+  this->pendingInputUpdates.reserve(64);
 }
 
 TritonController::~TritonController() {
@@ -292,14 +293,11 @@ void TritonController::setupPCMStreaming(TritonPCMMode mode) {
   }
 }
 
-/*
-  Technically stops the controller from turning off by itself. Steam itself being open does the same.
-  It's still being polled by something even if either are not running so thats confusing.
-  idk ¯\_(ツ)_/¯
-*/
-void TritonController::startPoll() {
+
+void TritonController::startPoll(bool processUpdate) {
   if (pollThread.joinable()) return;
   running.store(true);
+  processUpdates.store(processUpdate);
   pollThread = std::thread([this]() {
     pollLoop();
   });
@@ -307,7 +305,15 @@ void TritonController::startPoll() {
 
 void TritonController::stopPoll() {
   running.store(false);
+  processUpdates.store(false);
   // if (pollThread.joinable()) pollThread.join();
+}
+
+std::vector<TritonInputUpdate> TritonController::pollUpdates() {
+  std::lock_guard<std::mutex> lock(inputMutex);
+  std::vector<TritonInputUpdate> updates = pendingInputUpdates;
+  pendingInputUpdates.clear();
+  return updates;
 }
 
 void TritonController::pollLoop() {
@@ -325,6 +331,16 @@ void TritonController::pollLoop() {
         {
           TritonMTUFull_t packet{};
           memcpy(&packet, buff, 53);
+          {
+            std::lock_guard<std::mutex> lock(inputMutex);
+            if (processUpdates.load()) {
+              TritonInputUpdate updt{};
+              updt.state = packet;
+              updt.pressed = packet.buttons & ~_state.buttons;
+              updt.released = _state.buttons & ~packet.buttons;
+              pendingInputUpdates.push_back(updt);
+            }
+          }
           std::lock_guard<std::mutex> lock(stateMutex);
           this->_state = packet;
           stateCounter++;
