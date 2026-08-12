@@ -284,19 +284,6 @@ enum EChargeState {
 
 /*
 //
-  some unknown ones,
-  7b, runs about at 2hz
-  4 continous packets:
-        7bf901860000000300d7004402
-        7bf801860000000300d7004402
-        7bf601850000000300d7004402
-        7bf801860000000400d8004402
-
-  // could just be random but idk, the 0x79 reports were last
-  off (via held button):                                       7b6f02200008000300c3030a02
-  off (via timeout (roughly 16 minutes, 955.75 seconds)):      7bf302430008000300d4032e02
-  on:   7b6f02200008000300c3030a02
-
   41,
   turning off: 410000000000000000
 
@@ -320,6 +307,7 @@ enum ETritonReportIDTypes {
   ID_TRITON_CONTROLLER_STATE_TIMESTAMP = 0x47,
 
   ID_TRITON_WIRELESS_STATUS = 0x79,
+  ID_TRITON_QoS_STATUS = 0x7B
 };
 
 // packet with data like 7901 / 7902
@@ -603,11 +591,20 @@ enum class TritonPCMOperation {
   ENABLE = 2
 };
 
-enum class TritonInterface {
-  PUCK,
-  WIRED
-};
 /*Structs found via RE*/
+enum class ETritonPairType {
+  k_ETritonPairType_None,
+  k_ETritonPairType_Wired,
+  k_ETritonPairType_Wireless
+};
+
+enum class ETritonConnectionType {
+  k_ETritonConnectionType_Unknown,
+  k_ETritonConnectionType_Puck,
+  k_ETritonConnectionType_Machine,
+  k_ETritonConnectionType_USB,
+  k_ETritonConnectionType_BT
+};
 
 typedef struct
 {
@@ -639,6 +636,21 @@ typedef struct
   uint8_t side;
   char data[61];
 } MsgHapticPCMMonoWithLength;
+
+// found from the hell holes of steamclient64.dll and of host_chunk.js protobufs
+typedef struct
+{
+ uint16_t period_ms;
+ uint16_t packets_sent;
+ uint16_t packet_retransmissions;
+ uint16_t interval_max_ms;
+ int8_t rssi_measure;
+ uint8_t reason;
+ uint8_t rf_channel;
+ uint8_t backupChannel;
+
+} TritonQoSStatus;
+
 
 #pragma pack(pop)
 #pragma endregion
@@ -685,12 +697,12 @@ private:
 
   std::atomic<uint64_t> stateCounter{0};
   std::atomic<uint64_t> batteryCounter{0};
-  TritonInterface connectionType{};
+  ETritonPairType connectionType{};
   
   // use to check if the controller has disconnected, if true, delete this class and use controller finder to try connect again
   std::atomic<bool> disconnected = false;
   
-  TritonController(hid_device* handle, TritonInterface connection);
+  TritonController(hid_device* handle, ETritonPairType connection);
   ~TritonController();
   void close();
   int playNote(int channel, int note, int velocity);

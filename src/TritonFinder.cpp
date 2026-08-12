@@ -40,37 +40,38 @@ TritonFinder::~TritonFinder() {
 
 // basically completely stolen from SteamHapticsSinger
 TritonController* TritonFinder::getController() {
-  ControllerType type;
+  ETritonConnectionType type = ETritonConnectionType::k_ETritonConnectionType_Unknown;
 
   hid_device* hid_handle;
 
   // could also be ble but bleh
-  bool tritonWired = false;
+  ETritonPairType pairType = ETritonPairType::k_ETritonPairType_None;
   // Open Steam Controller device
 
   if ((hid_handle = this->open_steam_controller_hid(0x1302)) != nullptr) { // Steam Controller (2026)
     if (!silent) std::cout << "Found wired Steam Controller (2026)" << std::endl;
-    type = ControllerType::Triton;
-    tritonWired = true;
+    type = ETritonConnectionType::k_ETritonConnectionType_USB;
 
   } else if ((hid_handle = this->open_steam_controller_hid(0x1304)) != nullptr) { // Steam Puck
     if (!silent) std::cout << "Found Steam Puck, using first Steam Controller (2026)" << std::endl;
-    type = ControllerType::Triton;
-    
+    type = ETritonConnectionType::k_ETritonConnectionType_Puck;
+
   } else if ((hid_handle = this->open_steam_controller_hid(0x1305)) != nullptr) { // Steam Machine internal puck
     if (!silent) std::cout << "Found Steam Machine internal puck, using first Steam Controller (2026)" << std::endl;
-    type = ControllerType::Triton;
+    type = ETritonConnectionType::k_ETritonConnectionType_Machine;
   } else {
     if (!silent) std::cout << "No device found" << std::endl;
-    type = ControllerType::None;
   }
 
   switch (type) {
-    case ControllerType::None:
+    case ETritonConnectionType::k_ETritonConnectionType_Unknown:
       return nullptr;
       break;
-    case ControllerType::Triton:
-      return new TritonController(hid_handle, static_cast<TritonInterface>(tritonWired));
+
+    case ETritonConnectionType::k_ETritonConnectionType_USB:
+    case ETritonConnectionType::k_ETritonConnectionType_Puck:
+    case ETritonConnectionType::k_ETritonConnectionType_Machine:
+      return new TritonController(hid_handle, pairType);
       break;
     default:
       return nullptr;
