@@ -284,12 +284,6 @@ enum EChargeState {
 
 /*
 //
-  41,
-  turning off: 410000000000000000
-
-  40,
-  turning off: 400000000000
-
   44, upon closing steam - got 14 packets of either
   440102000000 - 10 - 1,3,5,7,9,11,12,13,14
   440002000000 - 4
@@ -300,6 +294,8 @@ enum EChargeState {
 
 */
 enum ETritonReportIDTypes {
+  ID_TRITON_LIZARD_MOUSE = 0x40,
+  ID_TRITON_LIZARD_KEYBOARD = 0x41,
   ID_TRITON_CONTROLLER_STATE = 0x42,
   ID_TRITON_BATTERY_STATUS = 0x43,
   ID_TRITON_CONTROLLER_STATE_BLE = 0x45,
@@ -606,6 +602,22 @@ enum class ETritonConnectionType {
   k_ETritonConnectionType_BT
 };
 
+enum class HIDKbModifier : uint8_t {
+    MOD_NONE        = 0x00,
+
+    MOD_LEFT_CTRL   = 0x01,
+    MOD_LEFT_SHIFT  = 0x02,
+    MOD_LEFT_ALT    = 0x04,
+    MOD_LEFT_GUI    = 0x08, // Windows key/whatever
+
+    MOD_RIGHT_CTRL  = 0x10,
+    MOD_RIGHT_SHIFT = 0x20,
+    MOD_RIGHT_ALT   = 0x40,
+    MOD_RIGHT_GUI   = 0x80,
+};
+
+// i would also add a enum for hid keycodes, but im lazy, find them somewhere else :)
+
 typedef struct
 {
   // still dont quite know what any of these 3 do, however these are best guesses
@@ -640,17 +652,33 @@ typedef struct
 // found from the hell holes of steamclient64.dll and of host_chunk.js protobufs
 typedef struct
 {
- uint16_t period_ms;
- uint16_t packets_sent;
- uint16_t packet_retransmissions;
- uint16_t interval_max_ms;
- int8_t rssi_measure;
- uint8_t reason;
- uint8_t rf_channel;
- uint8_t backupChannel;
-
+  uint16_t period_ms;
+  uint16_t packets_sent;
+  uint16_t packet_retransmissions;
+  uint16_t interval_max_ms;
+  int8_t rssi_measure;
+  uint8_t reason;
+  uint8_t rf_channel;
+  uint8_t backupChannel;
+  
 } TritonQoSStatus;
 
+typedef struct
+{
+  uint8_t buttons;
+  int8_t x;
+  int8_t y;
+  int8_t wheel;
+  int8_t pan;
+} TritonMouseReport;
+
+typedef struct
+{
+  uint8_t modifiers;
+  uint8_t reserved;
+  uint8_t keycodes[6];
+
+} TritonKeyboardReport;
 
 #pragma pack(pop)
 #pragma endregion
