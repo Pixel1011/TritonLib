@@ -1,5 +1,5 @@
 # Triton Lib
-A general purpose library for anything to do with the 2026 steam controller.
+A general purpose, easy to use library for anything to do with the 2026 steam controller.
 
 Mainly for use by me for my steam controller projects
 [SteamHapticsPlayer](https://github.com/Pixel1011/SteamHapticsPlayer)
@@ -7,7 +7,7 @@ Mainly for use by me for my steam controller projects
 
 
 I am happy for anyone to use this library, as long as credit is given, though,
-assume nothing is stable and everything could change at any time
+assume nothing is stable and everything could change at any time  (however i will try not to do that too much)
 
 
 **Usage:**
