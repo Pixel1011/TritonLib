@@ -94,6 +94,9 @@ typedef struct
 
 } FeatureReportMsg;
 
+// i wish we had all of the enums instead of just lizard mode :(
+// and figuring it all out manually will take a ridiculous amount of time (i am very, very happy with pull requests if anyone wishes to help :D)
+
 typedef enum
 {
 	LIZARD_MODE_OFF,
@@ -106,7 +109,10 @@ typedef enum
 	SETTING_MOUSE_SENSITIVITY,
 	SETTING_MOUSE_ACCELERATION,
 	SETTING_TRACKBALL_ROTATION_ANGLE,
-	SETTING_HAPTIC_INTENSITY_UNUSED,
+	SETTING_HAPTIC_INTENSITY_UNUSED, // weirdly enough, steam sends this one (as 01 87 03 09) every 3 secs or so.
+                                   //                                          ^hid feature indicator, set settings, this var, value of 09
+                                   // I have mine set to +12db, if that helps anyone with the value part
+  
 	SETTING_LEFT_GAMEPAD_STICK_ENABLED,
 	SETTING_RIGHT_GAMEPAD_STICK_ENABLED,
 	SETTING_USB_DEBUG_MODE,
@@ -515,6 +521,7 @@ typedef struct
 
   short sRightPadX;
   short sRightPadY;
+  // 0-32
   unsigned short unPressureRight;
   TritonMTUIMU_t imu;
 } TritonMTUFull_t;
