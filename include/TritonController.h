@@ -7,6 +7,11 @@
 #include <functional>
 #define HID_FEATURE_REPORT_BYTES 64
 // have not tested 0x87 and 0x89. i could be completely wrong about them
+
+
+// note to fix rumble as it will timeout after 50ms, so like sdl, resend every 40, but need to do funny thread stuff with poll loop
+// also when using lizard mode off, should have a var that updates it every 3 secs to avoid it going back to on
+
 #pragma region structs
 #pragma pack(push, 1)
 
@@ -103,22 +108,22 @@ typedef enum
 	LIZARD_MODE_ON,
 } LizardModeState_t;
 
-// Read-write controller settings (only add to this enum and never change the order)
+// Read-write controller settings (only add to this enum and never change the order) I will leave this as is with the defs from SDL, though will add comments for each once i properly learn
 typedef enum 
 {
 	SETTING_MOUSE_SENSITIVITY,
 	SETTING_MOUSE_ACCELERATION,
 	SETTING_TRACKBALL_ROTATION_ANGLE,
-	SETTING_HAPTIC_INTENSITY_UNUSED, // weirdly enough, steam sends this one (as 01 87 03 09) every 3 secs or so.
-                                   //                                          ^hid feature indicator, set settings, this var, value of 09
-                                   // I have mine set to +12db, if that helps anyone with the value part
+	SETTING_HAPTIC_INTENSITY_UNUSED,
   
 	SETTING_LEFT_GAMEPAD_STICK_ENABLED,
 	SETTING_RIGHT_GAMEPAD_STICK_ENABLED,
 	SETTING_USB_DEBUG_MODE,
 	SETTING_LEFT_TRACKPAD_MODE,
 	SETTING_RIGHT_TRACKPAD_MODE,
-	SETTING_LIZARD_MODE,
+  // steam sends this one (as 01 87 03 09 00 00) every 3 secs or so.
+  // does what it says, use LizardModeState_t
+	SETTING_LIZARD_MODE, 
 
 	// 10
 	SETTING_DPAD_DEADZONE,
@@ -287,17 +292,13 @@ enum EChargeState {
   44, upon closing steam - got 14 packets of either
   440102000000 - 10 - 1,3,5,7,9,11,12,13,14
   440002000000 - 4
-
-  also saw 80 sent from steam a bunch of times after closing steam
-  8001401f0000fb0000fb
-
-
 */
 enum ETritonReportIDTypes {
   ID_TRITON_LIZARD_MOUSE = 0x40,
   ID_TRITON_LIZARD_KEYBOARD = 0x41,
   ID_TRITON_CONTROLLER_STATE = 0x42,
   ID_TRITON_BATTERY_STATUS = 0x43,
+  // difference is no quaternion, so use TritonMTUNoQuat_t
   ID_TRITON_CONTROLLER_STATE_BLE = 0x45,
   ID_TRITON_WIRELESS_STATUS_X = 0x46,
   ID_TRITON_CONTROLLER_STATE_TIMESTAMP = 0x47,
@@ -308,6 +309,7 @@ enum ETritonReportIDTypes {
 
 // packet with data like 7901 / 7902
 enum ETritonWirelessState {
+  k_ETritonWirelessStateNone = 0,
   k_ETritonWirelessStateDisconnect = 1,
   k_ETritonWirelessStateConnect = 2,
 };
@@ -455,6 +457,7 @@ typedef struct
   short sGyroY;
   short sGyroZ;
 
+  // While the main output is formatted with these, they are never filled with other than 32767,0,0,0. As the built-in SFLP is set to only output gyro-bias data in firmware rather than also the quaternion data
   short sGyroQuatW;
   short sGyroQuatX;
   short sGyroQuatY;
@@ -559,10 +562,45 @@ typedef struct
 
   TritonMTUIMUNoQuat32usTS_t imu;
 } TritonMTUNoQuat32TS_t;
+
+// i believe used for SETTING_IMU_MODE though not sure, was in SDL tho,
+// after testing, no idea, 0 does turn it off, but (and i might be dumb because it was only a small amount of testing) anything >0 would just enable everything again and i couldnt get the quaternion to update
+typedef enum
+{
+	SETTING_GYRO_MODE_OFF				= 0x0000,
+	SETTING_GYRO_MODE_STEERING			= 0x0001,
+	SETTING_GYRO_MODE_TILT				= 0x0002,
+	SETTING_GYRO_MODE_SEND_ORIENTATION	= 0x0004,
+	SETTING_GYRO_MODE_SEND_RAW_ACCEL	= 0x0008,
+	SETTING_GYRO_MODE_SEND_RAW_GYRO		= 0x0010,
+} SettingGyroMode;
+
+// Read-write settings for dongle (only add to this enum and never change the order)
+// unknown if this one actually is used for anything, though i think
+typedef enum 
+{
+	DONGLE_SETTING_MOUSE_KEYBOARD_ENABLED,
+	DONGLE_SETTING_COUNT,
+} DongleSettings;
+
+// could be something but absolutely no idea
+typedef enum
+{
+	AUDIO_STARTUP		= 0,
+	AUDIO_SHUTDOWN		= 1,
+	AUDIO_PAIR			= 2,
+	AUDIO_PAIR_SUCCESS	= 3,
+	AUDIO_IDENTIFY		= 4,
+	AUDIO_LIZARDMODE	= 5,
+	AUDIO_NORMALMODE	= 6,
+
+	AUDIO_MAX_SLOT      = 15
+} ControllerAudio;
+
 // end of sdl stuff
 
 
-
+/*Structs found via RE*/
 enum class TritonPCMMode {
   Khz8_16Bit,
   Khz4_16Bit,
@@ -587,7 +625,6 @@ enum class TritonPCMOperation {
   ENABLE = 2
 };
 
-/*Structs found via RE*/
 enum class ETritonPairType {
   k_ETritonPairType_None,
   k_ETritonPairType_Wired,
@@ -616,7 +653,47 @@ enum class HIDKbModifier : uint8_t {
     MOD_RIGHT_GUI   = 0x80,
 };
 
-// i would also add a enum for hid keycodes, but im lazy, find them somewhere else :)
+enum HIDKeyboardKeys
+{
+	KEY_INVALID,
+	KEY_FIRST = 0x04,
+	KEY_A = KEY_FIRST, KEY_B, KEY_C, KEY_D, KEY_E, KEY_F, KEY_G, KEY_H, KEY_I, KEY_J, KEY_K, KEY_L, 
+	KEY_M, KEY_N, KEY_O, KEY_P, KEY_Q, KEY_R, KEY_S, KEY_T, KEY_U, KEY_V, KEY_W, KEY_X, KEY_Y, KEY_Z, KEY_1, KEY_2, 
+	KEY_3, KEY_4, KEY_5, KEY_6, KEY_7, KEY_8, KEY_9, KEY_0, KEY_RETURN, KEY_ESCAPE, KEY_BACKSPACE, KEY_TAB, KEY_SPACE, KEY_DASH, KEY_EQUALS, KEY_LEFT_BRACKET,
+	KEY_RIGHT_BRACKET, KEY_BACKSLASH, KEY_UNUSED1, KEY_SEMICOLON, KEY_SINGLE_QUOTE, KEY_BACK_TICK, KEY_COMMA, KEY_PERIOD, KEY_FORWARD_SLASH, KEY_CAPSLOCK, KEY_F1, KEY_F2, KEY_F3, KEY_F4, KEY_F5, KEY_F6,
+	KEY_F7, KEY_F8, KEY_F9, KEY_F10, KEY_F11, KEY_F12, KEY_PRINT_SCREEN, KEY_SCROLL_LOCK, KEY_BREAK, KEY_INSERT, KEY_HOME, KEY_PAGE_UP, KEY_DELETE, KEY_END, KEY_PAGE_DOWN, KEY_RIGHT_ARROW,
+	KEY_LEFT_ARROW, KEY_DOWN_ARROW, KEY_UP_ARROW, KEY_NUM_LOCK, KEY_KEYPAD_FORWARD_SLASH, KEY_KEYPAD_ASTERISK, KEY_KEYPAD_DASH, KEY_KEYPAD_PLUS, KEY_KEYPAD_ENTER, KEY_KEYPAD_1, KEY_KEYPAD_2, KEY_KEYPAD_3, KEY_KEYPAD_4, KEY_KEYPAD_5, KEY_KEYPAD_6, KEY_KEYPAD_7,
+	KEY_KEYPAD_8, KEY_KEYPAD_9, KEY_KEYPAD_0, KEY_KEYPAD_PERIOD,
+	KEY_LALT,
+  KEY_LSHIFT,
+  KEY_LWIN,
+  KEY_LCONTROL,
+  KEY_RALT,
+  KEY_RSHIFT,
+  KEY_RWIN,
+  KEY_RCONTROL,
+	KEY_VOLUP,
+	KEY_VOLDOWN,
+	KEY_MUTE,
+	KEY_PLAY,
+	KEY_STOP,
+	KEY_NEXT,
+	KEY_PREV,
+  KEY_LAST = KEY_PREV
+};
+
+// Hid mouse buttons
+enum MouseButtons
+{
+	MOUSE_BTN_LEFT,
+	MOUSE_BTN_RIGHT,
+	MOUSE_BTN_MIDDLE,
+	MOUSE_BTN_BACK,
+	MOUSE_BTN_FORWARD,
+	MOUSE_SCROLL_UP,
+	MOUSE_SCROLL_DOWN,
+	MOUSE_BTN_COUNT
+};
 
 typedef struct
 {
