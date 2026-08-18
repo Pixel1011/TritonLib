@@ -8,7 +8,7 @@
 
 TritonController::TritonController(hid_device* handle, ETritonPairType connection) {
   this->hid_handle = handle;
-  this->connectionType = connection;
+  this->pairType = connection;
   this->pendingInputUpdates.reserve(64);
 }
 
@@ -55,7 +55,7 @@ int TritonController::playFrequency(uint8_t channel, uint16_t frequency, int8_t 
 int TritonController::_playStereoAudio(uint8_t pcmBytes[], size_t length, TritonPCMMode mode, std::function<void(int step)> callback) {
   if (length <= 0) return -1;
   // not enough bandwidth so cant play regardless
-  if (this->connectionType == ETritonPairType::k_ETritonPairType_Wireless && mode == TritonPCMMode::Khz8_16Bit) return -2;
+  if (this->pairType == ETritonPairType::k_ETritonPairType_Wireless && mode == TritonPCMMode::Khz8_16Bit) return -2;
 
   this->setupPCMStreaming(mode);
 
@@ -228,7 +228,7 @@ int TritonController::sendFeatureReport(FeatureReportMsg* msg, size_t length) {
 // will return -1 if controller disconnects, otherwise length of bytes read
 int TritonController::readRaw(uint8_t buff[], size_t length) {
   int r = hid_read_timeout(this->hid_handle, buff, length, 100);
-  if (r < 0 || (connectionType == ETritonPairType::k_ETritonPairType_Wireless && r <= 0)) {
+  if (r < 0 || (pairType == ETritonPairType::k_ETritonPairType_Wireless && r <= 0)) {
     printf("Read Error, hid_error: %ls\n", hid_error(this->hid_handle));
     stopPoll();
     disconnected.store(true);

@@ -802,7 +802,7 @@ private:
 
   std::atomic<uint64_t> stateCounter{0};
   std::atomic<uint64_t> batteryCounter{0};
-  ETritonPairType connectionType{};
+  ETritonPairType pairType{};
   
   // use to check if the controller has disconnected, if true, delete this class and use controller finder to try connect again
   std::atomic<bool> disconnected = false;
