@@ -52,7 +52,7 @@ int TritonController::playFrequency(uint8_t channel, uint16_t frequency, int8_t 
   return sendLFOTone(&packet);
 }
 
-int TritonController::_playStereoAudio(uint8_t pcmBytes[], size_t length, TritonPCMMode mode, std::function<void(int step)> callback) {
+int TritonController::_playStereoAudio(uint8_t pcmBytes[], size_t length, TritonPCMMode mode, std::function<void(int step, int* readPointer)> callback) {
   if (length <= 0) return -1;
   // not enough bandwidth so cant play regardless
   if (this->pairType == ETritonPairType::k_ETritonPairType_Wireless && mode == TritonPCMMode::Khz8_16Bit) return -2;
@@ -135,7 +135,7 @@ int TritonController::_playStereoAudio(uint8_t pcmBytes[], size_t length, Triton
     }
 
     this->sendPCMStereo(&packet);
-    callback(NEED_BYTES);
+    callback(NEED_BYTES, &readPointer);
     nextPacketTime += period;
 
     while (std::chrono::steady_clock::now() < nextPacketTime) {}
@@ -144,7 +144,7 @@ int TritonController::_playStereoAudio(uint8_t pcmBytes[], size_t length, Triton
   return 0;
 }
 
-int TritonController::playStereoAudio(uint8_t pcmBytes[], size_t length, TritonPCMMode mode, std::function<void(int step)> callback) {
+int TritonController::playStereoAudio(uint8_t pcmBytes[], size_t length, TritonPCMMode mode, std::function<void(int step, int* readPointer)> callback) {
   {
     std::lock_guard<std::mutex> lock(audioMutex);
     if (playingAudio.load()) {
@@ -292,7 +292,6 @@ void TritonController::setupPCMStreaming(TritonPCMMode mode) {
     sendPCMMode(&packet);
   }
 }
-
 
 void TritonController::startPoll(bool processUpdate) {
   if (pollThread.joinable()) return;
