@@ -51,14 +51,17 @@ TritonController* TritonFinder::getController() {
   if ((hid_handle = this->open_steam_controller_hid(0x1302)) != nullptr) { // Steam Controller (2026)
     if (!silent) std::cout << "Found wired Steam Controller (2026)" << std::endl;
     type = ETritonConnectionType::k_ETritonConnectionType_USB;
-
+    pairType = ETritonPairType::k_ETritonPairType_Wired;
+    
   } else if ((hid_handle = this->open_steam_controller_hid(0x1304)) != nullptr) { // Steam Puck
     if (!silent) std::cout << "Found Steam Puck, using first Steam Controller (2026)" << std::endl;
     type = ETritonConnectionType::k_ETritonConnectionType_Puck;
-
+    pairType = ETritonPairType::k_ETritonPairType_Wireless;
+    
   } else if ((hid_handle = this->open_steam_controller_hid(0x1305)) != nullptr) { // Steam Machine internal puck
     if (!silent) std::cout << "Found Steam Machine internal puck, using first Steam Controller (2026)" << std::endl;
     type = ETritonConnectionType::k_ETritonConnectionType_Machine;
+    pairType = ETritonPairType::k_ETritonPairType_Wireless;
   } else {
     if (!silent) std::cout << "No device found" << std::endl;
   }
