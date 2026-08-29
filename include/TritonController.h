@@ -790,9 +790,9 @@ private:
   TritonPCMMode currentMode;
   
   // input process stuff
+  std::mutex inputMutex;
   std::atomic<bool> processUpdates = false;
   std::vector<TritonInputUpdate> pendingInputUpdates;
-  std::mutex inputMutex;
   
   void pollLoop();
   int _playStereoAudio(uint8_t pcmBytes[], size_t length, TritonPCMMode mode, std::function<void(int step, int* readPointer)> callback);
@@ -814,7 +814,7 @@ private:
   int playFrequency(uint8_t channel, uint16_t frequency, int8_t gaindb, uint16_t durationms = 0xffff, uint16_t lfoFreq = 0, uint8_t lfoDepth = 0);
   // plays audio on the steam controller with given data on a new thread. If called again, will stop and play new audio.
   int playStereoAudio(uint8_t pcmBytes[], size_t length, TritonPCMMode mode, std::function<void(int step, int* readPointer)> callback = [](int step, int* readPointer) {/*do nothing*/});
-  int setLizardMode(LizardModeState_t mode);
+  void setLizardMode(LizardModeState_t mode);
   
   int sendPCMMode(MsgHapticPCMMode* packet);
   int sendPCMStereo(MsgHapticPCMStereo* packet);
@@ -823,6 +823,7 @@ private:
   int sendRaw(uint8_t bytes[], size_t length);
   int readRaw(uint8_t buff[], size_t length);
   int sendFeatureReport(FeatureReportMsg* msg, size_t length);
+  int setControllerSetting(ControllerSettings setting, uint16_t value);
 
   void setupPCMStreaming(TritonPCMMode mode);
   // reading

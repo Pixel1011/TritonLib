@@ -92,7 +92,7 @@ int TritonController::_playStereoAudio(uint8_t pcmBytes[], size_t length, Triton
 
   auto nextPacketTime = std::chrono::steady_clock::now();
   {
-    std::lock_guard<std::mutex> lock(audioMutex);
+    std::scoped_lock lock(audioMutex);
     playingAudio.store(true);
   }
   while (true) {
@@ -146,7 +146,7 @@ int TritonController::_playStereoAudio(uint8_t pcmBytes[], size_t length, Triton
 
 int TritonController::playStereoAudio(uint8_t pcmBytes[], size_t length, TritonPCMMode mode, std::function<void(int step, int* readPointer)> callback) {
   {
-    std::lock_guard<std::mutex> lock(audioMutex);
+    std::scoped_lock lock(audioMutex);
     if (playingAudio.load()) {
       playingAudio.store(false);
     }
@@ -160,14 +160,11 @@ int TritonController::playStereoAudio(uint8_t pcmBytes[], size_t length, TritonP
   return 1;
 }
 
-int TritonController::setLizardMode(LizardModeState_t mode) {
-  FeatureReportMsg msg{};
-  msg.header.type = ID_SET_SETTINGS_VALUES;
-  msg.header.length = sizeof(ControllerSetting);
-  msg.payload.setSettingsValues.settings[0].settingNum = SETTING_LIZARD_MODE;
-  msg.payload.setSettingsValues.settings[0].settingValue = mode;
-
-  return sendFeatureReport(&msg, sizeof(msg));
+void TritonController::setLizardMode(LizardModeState_t mode) {
+  // disable SETTING_STEAM_WATCHDOG_ENABLE to stop lizard mode resetting then actually turn off lizard mode, or vice versa
+  // thamks linux kernel for telling me how to do this without needing to use a thread to constantly send them every 3 secs (at least i think after looking at the code for a few mins)
+  this->setControllerSetting(SETTING_STEAM_WATCHDOG_ENABLE, mode);
+  this->setControllerSetting(SETTING_LIZARD_MODE, mode);
 }
 
 int TritonController::sendPCMMode(MsgHapticPCMMode* packet) {
@@ -225,6 +222,17 @@ int TritonController::sendFeatureReport(FeatureReportMsg* msg, size_t length) {
   return r;
 }
 
+int TritonController::setControllerSetting(ControllerSettings setting, uint16_t value) {
+  if (setting < 0 || setting > SETTING_COUNT) return -4;
+
+  FeatureReportMsg settingsMsg{};
+  settingsMsg.header.type = ID_SET_SETTINGS_VALUES;
+  settingsMsg.header.length = sizeof(ControllerSetting);
+  settingsMsg.payload.setSettingsValues.settings[0].settingNum = setting;
+  settingsMsg.payload.setSettingsValues.settings[0].settingValue = value;
+  return sendFeatureReport(&settingsMsg, sizeof(settingsMsg));
+}
+
 // will return -1 if controller disconnects, otherwise length of bytes read
 int TritonController::readRaw(uint8_t buff[], size_t length) {
   int r = hid_read_timeout(this->hid_handle, buff, length, 100);
@@ -238,17 +246,18 @@ int TritonController::readRaw(uint8_t buff[], size_t length) {
 }
 
 TritonMTUFull_t TritonController::getFullReport() {
-  std::lock_guard<std::mutex> lock(stateMutex);
+  std::scoped_lock lock(stateMutex);
   return _state;
 }
 
 TritonBatteryStatus_t TritonController::getBatteryStatus() {
-  std::lock_guard<std::mutex> lock(batteryMutex);
+  std::scoped_lock lock(batteryMutex);
   return _battery;
 }
 
+// use input queue instead, but will leave this 
 bool TritonController::isPressed(TritonButtons btn) {
-  std::lock_guard<std::mutex> lock(stateMutex);
+  std::scoped_lock lock(stateMutex);
   return (_state.buttons & btn) != 0;
 }
 
@@ -293,10 +302,11 @@ void TritonController::setupPCMStreaming(TritonPCMMode mode) {
   }
 }
 
+// can be called even if already running to change if updates should be processed (and if they are, make sure you are occasionally using pollUpdates, or updates will end up just leaking memory)
 void TritonController::startPoll(bool processUpdate) {
+  processUpdates.store(processUpdate);
   if (pollThread.joinable()) return;
   running.store(true);
-  processUpdates.store(processUpdate);
   pollThread = std::thread([this]() {
     pollLoop();
   });
@@ -305,11 +315,10 @@ void TritonController::startPoll(bool processUpdate) {
 void TritonController::stopPoll() {
   running.store(false);
   processUpdates.store(false);
-  // if (pollThread.joinable()) pollThread.join();
 }
 
 std::vector<TritonInputUpdate> TritonController::pollUpdates() {
-  std::lock_guard<std::mutex> lock(inputMutex);
+  std::scoped_lock lock(inputMutex);
   std::vector<TritonInputUpdate> updates = pendingInputUpdates;
   pendingInputUpdates.clear();
   return updates;
@@ -331,7 +340,7 @@ void TritonController::pollLoop() {
           TritonMTUFull_t packet{};
           memcpy(&packet, buff, 53);
           {
-            std::lock_guard<std::mutex> lock(inputMutex);
+            std::scoped_lock lock(inputMutex);
             if (processUpdates.load()) {
               TritonInputUpdate updt{};
               updt.state = packet;
@@ -340,7 +349,7 @@ void TritonController::pollLoop() {
               pendingInputUpdates.push_back(updt);
             }
           }
-          std::lock_guard<std::mutex> lock(stateMutex);
+          std::scoped_lock lock(stateMutex);
           this->_state = packet;
           stateCounter++;
           break;
@@ -349,7 +358,7 @@ void TritonController::pollLoop() {
         {
           TritonBatteryStatus_t battPacket{};
           memcpy(&battPacket, buff, 14);
-          std::lock_guard<std::mutex> lock(batteryMutex);
+          std::scoped_lock lock(batteryMutex);
           this->_battery = battPacket;
           batteryCounter++;
           break;
